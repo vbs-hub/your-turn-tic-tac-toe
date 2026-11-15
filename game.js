@@ -74,23 +74,18 @@ if (typeof document !== 'undefined') {
   function leave() {
     room?.close();room=null;pending=false;$('invite').hidden=true;
     history.replaceState(null,'',location.pathname+location.search);
-    $('network-status').textContent='Создай комнату или войди по ссылке друга.';
+    $('network-status').textContent='Создай комнату или введи код друга.';
     restart();
   }
   function selectMode(name){leave();mode=name;for(const id of modes)$(id).setAttribute('aria-pressed',String(id===mode));restart();}
   for(const name of modes)$(name).addEventListener('click',()=>selectMode(name));
-  function readCode(value){
-    let code=value.trim();
-    if(code.includes('#room='))code=code.split('#room=')[1];
-    return /^[a-f0-9]{24}$/.test(code)?code:null;
-  }
   function startRoom(code,host){
     leave();scores.online={X:0,O:0,draw:0};
     room=new OnlineRoom({
       onStatus:message=>{$('network-status').textContent=message;},
       onReady:ready=>{
         if(host){
-          $('invite-link').value=location.origin+location.pathname+'#room='+code;
+          $('invite-code').value=room.code;
           $('invite').hidden=false;
           if(ready){restart();publish();}
         }
@@ -112,17 +107,16 @@ if (typeof document !== 'undefined') {
   }
   function validState(data){return Array.isArray(data.board)&&data.board.length===9&&data.board.every(v=>v===null||v==='X'||v==='O')&&['X','O'].includes(data.turn)&&Number.isSafeInteger(data.revision)&&['X','O','draw'].every(k=>Number.isSafeInteger(data.scores?.[k])&&data.scores[k]>=0);}
   $('create-room').addEventListener('click',()=>{
-    const bytes=crypto.getRandomValues(new Uint8Array(12));
-    startRoom(Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join(''),true);
+    startRoom(createRoomCode(),true);
   });
   $('join-form').addEventListener('submit',event=>{
-    event.preventDefault();const code=readCode($('room-code').value);
-    if(!code){$('network-status').textContent='Вставь полную ссылку друга или код комнаты из 24 символов.';return;}
+    event.preventDefault();const code=parseRoomCode($('room-code').value);
+    if(!code){$('network-status').textContent='Введи код комнаты: 6 английских букв, например KMPWQZ.';return;}
     startRoom(code,false);
   });
-  $('copy-link').addEventListener('click',async()=>{
-    try{await navigator.clipboard.writeText($('invite-link').value);$('network-status').textContent='Ссылка скопирована! Отправь её другу.';}
-    catch{$('invite-link').select();$('network-status').textContent='Скопируй выделенную ссылку и отправь другу.';}
+  $('copy-code').addEventListener('click',async()=>{
+    try{await navigator.clipboard.writeText($('invite-code').value);$('network-status').textContent='Код скопирован! Друг должен ввести его на сайте.';}
+    catch{$('invite-code').select();$('network-status').textContent='Скопируй выделенный код и отправь другу.';}
   });
   $('leave-room').addEventListener('click',leave);
   $('restart').addEventListener('click',()=>{
@@ -133,7 +127,5 @@ if (typeof document !== 'undefined') {
   });
   $('reset').addEventListener('click',()=>{scores[mode]={X:0,O:0,draw:0};persist();restart();});
   window.addEventListener('pagehide',()=>room?.close());
-  const inviteCode=readCode(location.hash.replace(/^#room=/,''));
   restart();
-  if(inviteCode){$('room-code').value=inviteCode;startRoom(inviteCode,false);}
 }

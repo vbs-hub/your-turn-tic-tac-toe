@@ -17,7 +17,7 @@
     <section class="intro">
       <div class="eyebrow"><span></span> КЛАССИКА НА ДВОИХ</div>
       <h1>Три в ряд.<br>И ты <em>победил.</em></h1>
-      <p>Создай комнату, отправь другу ссылку и играйте с разных компьютеров или телефонов.</p>
+      <p>Создай комнату, скажи другу код и играйте с разных компьютеров или телефонов.</p>
       <div class="decoration" aria-hidden="true"><span>×</span><span>○</span><span>×</span></div>
       <div class="tip"><b>Простые правила</b><p>Собери три своих символа по горизонтали, вертикали или диагонали. Крестики ходят первыми.</p></div>
     </section>
@@ -25,9 +25,9 @@
       <div class="mode" role="group" aria-label="Режим игры"><button id="online" aria-pressed="true">Друг онлайн</button><button id="computer" aria-pressed="false">Компьютер</button><button id="friend" aria-pressed="false">На одном экране</button></div>
       <div id="online-panel" class="online-panel">
         <button id="create-room" class="restart">Создать комнату</button>
-        <form id="join-form"><label for="room-code">Код комнаты или ссылка друга</label><div class="join-row"><input id="room-code" autocomplete="off" placeholder="Вставь код или ссылку" required><button id="join-room" type="submit">Войти</button></div></form>
-        <div id="invite" hidden><label for="invite-link">Отправь эту ссылку другу</label><div class="join-row"><input id="invite-link" readonly><button id="copy-link">Копировать</button></div></div>
-        <p id="network-status" role="status" aria-live="polite">Создай комнату или войди по ссылке друга.</p>
+        <form id="join-form"><label for="room-code">Код комнаты</label><div class="join-row"><input id="room-code" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="6" placeholder="Например, KMPWQZ" required><button id="join-room" type="submit">Войти</button></div></form>
+        <div id="invite" hidden><label for="invite-code">Код комнаты — отправь другу</label><div class="join-row"><input id="invite-code" readonly><button id="copy-code">Копировать</button></div></div>
+        <p id="network-status" role="status" aria-live="polite">Создай комнату или введи код друга.</p>
         <button id="leave-room" class="reset" hidden>Выйти из комнаты</button>
       </div>
       <div class="game-heading"><h2 id="status" role="status" aria-live="polite">Твой ход</h2><span id="turn-badge">ТЫ — ×</span></div>
