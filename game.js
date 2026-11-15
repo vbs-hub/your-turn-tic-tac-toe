@@ -16,11 +16,30 @@ function bestMove(board) {
   for (const i of [4,0,2,6,8,1,3,5,7]) if (!board[i]) {board[i] = 'O'; const score = minimax(board,'X'); board[i] = null; if (score > best) {best=score; move=i;}}
   return move;
 }
-if (typeof module !== 'undefined') module.exports = {outcome,bestMove};
+const difficulties = {
+  easy: {chance:0, description:'Играет случайно — удобно для первых побед.'},
+  normal: {chance:0.55, description:'Чередует продуманные ходы и ошибки.'},
+  hard: {chance:0.9, description:'Почти всегда выбирает лучший ход. Лови редкие ошибки!'},
+  impossible: {chance:1, description:'Играет без ошибок. Лучший результат — ничья.'}
+};
+function computerMove(board, difficulty = 'normal', random = Math.random) {
+  if (outcome(board)) return -1;
+  const chance = (difficulties[difficulty] || difficulties.normal).chance;
+  if (chance === 1 || (chance > 0 && random() < chance)) return bestMove(board);
+  const empty = board.map((value,i) => value ? -1 : i).filter(i => i >= 0);
+  return empty[Math.floor(random() * empty.length)];
+}
+if (typeof module !== 'undefined') module.exports = {outcome,bestMove,computerMove};
 if (typeof document !== 'undefined') {
   const $ = id => document.getElementById(id);
   const modes = ['online', 'computer', 'friend'];
   let board, turn, ended, timer, room, mode = 'online', revision = 0, pending = false;
+  let difficulty = 'normal';
+  try {
+    const saved = localStorage.getItem('your-turn-difficulty');
+    if (Object.hasOwn(difficulties,saved)) difficulty = saved;
+  } catch {}
+  $('difficulty').value = difficulty;
   let scores = {computer:{X:0,O:0,draw:0},friend:{X:0,O:0,draw:0},online:{X:0,O:0,draw:0}};
   try {
     const saved = JSON.parse(localStorage.getItem('your-turn-scores'));
@@ -48,6 +67,8 @@ if (typeof document !== 'undefined') {
     $('restart').disabled=online&&(!connected()||!ended);
     $('reset').hidden=online;
     $('online-panel').hidden=!online;
+    $('difficulty-panel').hidden=mode!=='computer';
+    $('difficulty-description').textContent=difficulties[difficulty].description;
     $('leave-room').hidden=!room;
   }
   function persist() { try { localStorage.setItem('your-turn-scores',JSON.stringify(scores)); } catch {} }
@@ -68,7 +89,7 @@ if (typeof document !== 'undefined') {
       if(!room.host){pending=true;room.send({type:'move',index:i,revision});render();return;}
     }
     place(i);
-    if(!ended&&mode==='computer')timer=setTimeout(()=>place(bestMove(board)),400);
+    if(!ended&&mode==='computer')timer=setTimeout(()=>place(computerMove(board,difficulty)),400);
   }
   function restart(){clearTimeout(timer);board=Array(9).fill(null);turn='X';ended=false;pending=false;revision++;render();}
   function leave() {
@@ -79,6 +100,13 @@ if (typeof document !== 'undefined') {
   }
   function selectMode(name){leave();mode=name;for(const id of modes)$(id).setAttribute('aria-pressed',String(id===mode));restart();}
   for(const name of modes)$(name).addEventListener('click',()=>selectMode(name));
+  $('difficulty').addEventListener('change',()=>{
+    const selected = $('difficulty').value;
+    if (!Object.hasOwn(difficulties,selected)) return;
+    difficulty = selected;
+    try { localStorage.setItem('your-turn-difficulty',difficulty); } catch {}
+    restart();
+  });
   function startRoom(code,host){
     leave();scores.online={X:0,O:0,draw:0};
     room=new OnlineRoom({
