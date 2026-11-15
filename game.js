@@ -18,14 +18,73 @@ function bestMove(board) {
 }
 const difficulties = {
   easy: {chance:0, description:'Играет случайно — удобно для первых побед.'},
-  normal: {chance:0.55, description:'Чередует продуманные ходы и ошибки.'},
-  hard: {chance:0.9, description:'Почти всегда выбирает лучший ход. Лови редкие ошибки!'},
-  impossible: {chance:1, description:'Играет без ошибок. Лучший результат — ничья.'}
+  normal: {chance:0.55, description:'Атакует, рискует и часто ошибается.'},
+  hard: {chance:0.9, description:'Ищет ловушки и играет на победу, а не на ничью.'},
+  impossible: {chance:1, description:'Максимум атаки: просчитывает ловушки, но рискует. Его можно обыграть!'}
 };
+function winningMove(board, player) {
+  for (let i=0;i<9;i++) if (!board[i]) {
+    board[i]=player;
+    const wins=outcome(board)?.winner===player;
+    board[i]=null;
+    if(wins)return i;
+  }
+  return -1;
+}
+// Expectimax rewards winning chances, rather than a guaranteed safe draw.
+// Human replies are possible opportunities, not an assumed perfect adversary.
+// This deliberately permits strategic risks while still taking available wins.
+// Outcomes stay governed by the real board, including draws.
+function attackValue(board, player, cache) {
+  const result=outcome(board);
+  if(result)return result.winner==='O'?1:result.winner==='X'?-1:-0.8;
+  const key=board.map(v=>v||'-').join('')+player;
+  if(cache.has(key))return cache.get(key);
+  let moves=board.map((v,i)=>v?-1:i).filter(i=>i>=0);
+  if(player==='O') {
+    const win=winningMove(board,'O'), block=winningMove(board,'X');
+    if(win>=0)moves=[win];
+    else if(block>=0)moves=[block];
+  }
+  const values=moves.map(i=>{board[i]=player;const value=attackValue(board,player==='O'?'X':'O',cache);board[i]=null;return value;});
+  const value=player==='O'?Math.max(...values):values.reduce((a,b)=>a+b,0)/values.length;
+  cache.set(key,value);
+  return value;
+}
+function attackingMove(board, random=Math.random) {
+  const win=winningMove(board,'O');
+  if(win>=0)return win;
+  const cache=new Map();
+  const candidates=[];
+  for(let i=0;i<9;i++)if(!board[i]) {
+    board[i]='O';
+    candidates.push({move:i,score:attackValue(board,'X',cache),safe:minimax(board,'X'),canWin:canStillWin(board,'X',new Map())});
+    board[i]=null;
+  }
+  const safeValue=Math.max(...candidates.map(c=>c.safe));
+  // If perfect defence only draws, take a real winning chance even when the
+  // opponent can refute it. Never choose a known loss with no path to O winning.
+  const risks=safeValue===0?candidates.filter(c=>c.safe<0&&c.canWin):[];
+  const pool=safeValue>0?candidates.filter(c=>c.safe===safeValue):risks.length?risks:candidates;
+  const best=Math.max(...pool.map(c=>c.score));
+  const choices=pool.filter(c=>Math.abs(c.score-best)<1e-9).map(c=>c.move);
+  return choices.length?choices[Math.floor(random()*choices.length)]:-1;
+}
+function canStillWin(board,player,cache) {
+  const result=outcome(board);
+  if(result)return result.winner==='O';
+  const key=board.map(v=>v||'-').join('')+player;
+  if(cache.has(key))return cache.get(key);
+  for(let i=0;i<9;i++)if(!board[i]) {
+    board[i]=player;const possible=canStillWin(board,player==='O'?'X':'O',cache);board[i]=null;
+    if(possible){cache.set(key,true);return true;}
+  }
+  cache.set(key,false);return false;
+}
 function computerMove(board, difficulty = 'normal', random = Math.random) {
   if (outcome(board)) return -1;
   const chance = (difficulties[difficulty] || difficulties.normal).chance;
-  if (chance === 1 || (chance > 0 && random() < chance)) return bestMove(board);
+  if (chance === 1 || (chance > 0 && random() < chance)) return attackingMove(board,random);
   const empty = board.map((value,i) => value ? -1 : i).filter(i => i >= 0);
   return empty[Math.floor(random() * empty.length)];
 }
