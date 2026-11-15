@@ -19,23 +19,121 @@ function bestMove(board) {
 if (typeof module !== 'undefined') module.exports = {outcome,bestMove};
 if (typeof document !== 'undefined') {
   const $ = id => document.getElementById(id);
-  let board, turn, ended, timer, mode = 'computer';
-  let scores = {computer:{X:0,O:0,draw:0},friend:{X:0,O:0,draw:0}};
-  try {const saved=JSON.parse(localStorage.getItem('your-turn-scores')); if (saved && ['computer','friend'].every(m => ['X','O','draw'].every(k => Number.isSafeInteger(saved[m]?.[k]) && saved[m][k]>=0))) scores=saved;} catch {}
-  const cells = Array.from({length:9},(_,i) => {const button=document.createElement('button'); button.className='cell';button.addEventListener('click',()=>play(i));document.querySelector('.board').append(button);return button;});
+  const modes = ['online', 'computer', 'friend'];
+  let board, turn, ended, timer, room, mode = 'online', revision = 0, pending = false;
+  let scores = {computer:{X:0,O:0,draw:0},friend:{X:0,O:0,draw:0},online:{X:0,O:0,draw:0}};
+  try {
+    const saved = JSON.parse(localStorage.getItem('your-turn-scores'));
+    for (const m of ['computer','friend']) if (['X','O','draw'].every(k => Number.isSafeInteger(saved?.[m]?.[k]) && saved[m][k]>=0)) scores[m]=saved[m];
+  } catch {}
+  const cells = Array.from({length:9},(_,i) => {
+    const button=document.createElement('button'); button.className='cell';
+    button.addEventListener('click',()=>play(i)); document.querySelector('.board').append(button); return button;
+  });
+  function connected() { return Boolean(room?.ready); }
+  function mySymbol() { return room?.host ? 'X' : 'O'; }
   function render() {
-    const result=outcome(board);
-    cells.forEach((cell,i) => {cell.textContent=board[i] === 'X' ? '×' : board[i] === 'O' ? '○' : '';cell.className='cell'+(board[i]==='O'?' o':'')+(result?.line.includes(i)?' win':'');cell.disabled=Boolean(board[i])||ended||(mode==='computer'&&turn==='O');cell.setAttribute('aria-label',`Ряд ${Math.floor(i/3)+1}, столбец ${i%3+1}: ${board[i] || 'пусто'}`);});
-    $('status').textContent=result ? result.winner==='draw'?'Ничья. Ещё раунд?':mode==='computer'?(result.winner==='X'?'Ты победил!':'Компьютер победил'): `Победили ${result.winner==='X'?'крестики!':'нолики!'}` : mode==='computer'?(turn==='X'?'Твой ход':'Компьютер думает…'):`Ходят ${turn==='X'?'крестики':'нолики'}`;
-    $('turn-badge').textContent=ended?'РАУНД ЗАВЕРШЁН':mode==='computer'?'ТЫ — ×':`ХОД — ${turn==='X'?'×':'○'}`;
-    $('x-label').textContent=mode==='computer'?'Ты · ×':'Крестики · ×';$('o-label').textContent=mode==='computer'?'Компьютер · ○':'Нолики · ○';
+    const result=outcome(board), online=mode==='online';
+    cells.forEach((cell,i) => {
+      cell.textContent=board[i]==='X'?'×':board[i]==='O'?'○':'';
+      cell.className='cell'+(board[i]==='O'?' o':'')+(result?.line.includes(i)?' win':'');
+      cell.disabled=Boolean(board[i])||ended||(mode==='computer'&&turn==='O')||(online&&(!connected()||turn!==mySymbol()||pending));
+      cell.setAttribute('aria-label',`Ряд ${Math.floor(i/3)+1}, столбец ${i%3+1}: ${board[i] || 'пусто'}`);
+    });
+    $('status').textContent=online&&!connected()?'Ждём друга':result ? result.winner==='draw'?'Ничья. Ещё раунд?':mode==='computer'?(result.winner==='X'?'Ты победил!':'Компьютер победил'): `Победили ${result.winner==='X'?'крестики!':'нолики!'}` : online?(turn===mySymbol()?'Твой ход':'Ход друга'):mode==='computer'?(turn==='X'?'Твой ход':'Компьютер думает…'):`Ходят ${turn==='X'?'крестики':'нолики'}`;
+    $('turn-badge').textContent=online?(room?`ТЫ — ${mySymbol()==='X'?'×':'○'}`:'ОНЛАЙН'):ended?'РАУНД ЗАВЕРШЁН':mode==='computer'?'ТЫ — ×':`ХОД — ${turn==='X'?'×':'○'}`;
+    $('x-label').textContent=mode==='computer'?'Ты · ×':online&&room?(room.host?'Ты · ×':'Друг · ×'):'Крестики · ×';
+    $('o-label').textContent=mode==='computer'?'Компьютер · ○':online&&room?(room.host?'Друг · ○':'Ты · ○'):'Нолики · ○';
     for (const [key,id] of [['X','score-x'],['O','score-o'],['draw','score-draw']]) $(id).textContent=scores[mode][key];
+    $('restart').disabled=online&&(!connected()||!ended);
+    $('reset').hidden=online;
+    $('online-panel').hidden=!online;
+    $('leave-room').hidden=!room;
   }
-  function place(i) {board[i]=turn;const result=outcome(board);if(result){ended=true;scores[mode][result.winner]++;try{localStorage.setItem('your-turn-scores',JSON.stringify(scores));}catch{}}else turn=turn==='X'?'O':'X';render();}
-  function play(i) {if(ended||board[i]||(mode==='computer'&&turn==='O'))return;place(i);if(!ended&&mode==='computer')timer=setTimeout(()=>{place(bestMove(board));},400);}
-  function restart(){clearTimeout(timer);board=Array(9).fill(null);turn='X';ended=false;render();}
-  for(const name of ['computer','friend']) $(name).addEventListener('click',()=>{mode=name;for(const id of ['computer','friend']) $(id).setAttribute('aria-pressed',String(id===mode));restart();});
-  $('restart').addEventListener('click',restart);
-  $('reset').addEventListener('click',()=>{scores[mode]={X:0,O:0,draw:0};try{localStorage.setItem('your-turn-scores',JSON.stringify(scores));}catch{}restart();});
+  function persist() { try { localStorage.setItem('your-turn-scores',JSON.stringify(scores)); } catch {} }
+  function publish() { room?.send({type:'state',board:[...board],turn,revision,scores:scores.online}); }
+  function place(i) {
+    board[i]=turn; revision++;
+    const result=outcome(board);
+    if(result){ended=true;scores[mode][result.winner]++;if(mode!=='online')persist();}
+    else turn=turn==='X'?'O':'X';
+    render();
+    if(mode==='online')publish();
+  }
+  function legal(i) { return Number.isInteger(i)&&i>=0&&i<9&&!ended&&!board[i]; }
+  function play(i) {
+    if(!legal(i)||(mode==='computer'&&turn==='O'))return;
+    if(mode==='online'){
+      if(!connected()||turn!==mySymbol()||pending)return;
+      if(!room.host){pending=true;room.send({type:'move',index:i,revision});render();return;}
+    }
+    place(i);
+    if(!ended&&mode==='computer')timer=setTimeout(()=>place(bestMove(board)),400);
+  }
+  function restart(){clearTimeout(timer);board=Array(9).fill(null);turn='X';ended=false;pending=false;revision++;render();}
+  function leave() {
+    room?.close();room=null;pending=false;$('invite').hidden=true;
+    history.replaceState(null,'',location.pathname+location.search);
+    $('network-status').textContent='Создай комнату или войди по ссылке друга.';
+    restart();
+  }
+  function selectMode(name){leave();mode=name;for(const id of modes)$(id).setAttribute('aria-pressed',String(id===mode));restart();}
+  for(const name of modes)$(name).addEventListener('click',()=>selectMode(name));
+  function readCode(value){
+    let code=value.trim();
+    if(code.includes('#room='))code=code.split('#room=')[1];
+    return /^[a-f0-9]{24}$/.test(code)?code:null;
+  }
+  function startRoom(code,host){
+    leave();scores.online={X:0,O:0,draw:0};
+    room=new OnlineRoom({
+      onStatus:message=>{$('network-status').textContent=message;},
+      onReady:ready=>{
+        if(host){
+          $('invite-link').value=location.origin+location.pathname+'#room='+code;
+          $('invite').hidden=false;
+          if(ready){restart();publish();}
+        }
+        render();
+      },
+      onClose:()=>{pending=false;render();},
+      onMessage:data=>{
+        if(room.host){
+          if(data.type==='move'&&data.revision===revision&&turn==='O'&&legal(data.index))place(data.index);
+          else if(data.type==='restart'&&data.revision===revision&&ended){restart();publish();}
+          else publish();
+        } else if(data.type==='state'&&validState(data)&&data.revision>=revision){
+          board=[...data.board];turn=data.turn;revision=data.revision;scores.online={...data.scores};ended=Boolean(outcome(board));pending=false;render();
+        }
+      }
+    });
+    revision=0;
+    room.start(code,host);render();
+  }
+  function validState(data){return Array.isArray(data.board)&&data.board.length===9&&data.board.every(v=>v===null||v==='X'||v==='O')&&['X','O'].includes(data.turn)&&Number.isSafeInteger(data.revision)&&['X','O','draw'].every(k=>Number.isSafeInteger(data.scores?.[k])&&data.scores[k]>=0);}
+  $('create-room').addEventListener('click',()=>{
+    const bytes=crypto.getRandomValues(new Uint8Array(12));
+    startRoom(Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join(''),true);
+  });
+  $('join-form').addEventListener('submit',event=>{
+    event.preventDefault();const code=readCode($('room-code').value);
+    if(!code){$('network-status').textContent='Вставь полную ссылку друга или код комнаты из 24 символов.';return;}
+    startRoom(code,false);
+  });
+  $('copy-link').addEventListener('click',async()=>{
+    try{await navigator.clipboard.writeText($('invite-link').value);$('network-status').textContent='Ссылка скопирована! Отправь её другу.';}
+    catch{$('invite-link').select();$('network-status').textContent='Скопируй выделенную ссылку и отправь другу.';}
+  });
+  $('leave-room').addEventListener('click',leave);
+  $('restart').addEventListener('click',()=>{
+    if(mode==='online'){
+      if(!connected()||!ended)return;
+      if(room.host){restart();publish();}else room.send({type:'restart',revision});
+    }else restart();
+  });
+  $('reset').addEventListener('click',()=>{scores[mode]={X:0,O:0,draw:0};persist();restart();});
+  window.addEventListener('pagehide',()=>room?.close());
+  const inviteCode=readCode(location.hash.replace(/^#room=/,''));
   restart();
+  if(inviteCode){$('room-code').value=inviteCode;startRoom(inviteCode,false);}
 }

@@ -7,6 +7,8 @@
   <meta name="description" content="Крестики-нолики: играй с другом или брось вызов компьютеру. Бесплатно, прямо в браузере.">
   <title>Твой ход — крестики-нолики</title>
   <link rel="stylesheet" href="style.css">
+  <script src="vendor/peerjs.min.js" defer></script>
+  <script src="online.js" defer></script>
   <script src="game.js" defer></script>
 </head>
 <body>
@@ -15,12 +17,19 @@
     <section class="intro">
       <div class="eyebrow"><span></span> КЛАССИКА НА ДВОИХ</div>
       <h1>Три в ряд.<br>И ты <em>победил.</em></h1>
-      <p>Всё знакомо: крестик, нолик и один хороший ход. Позови друга или сыграй с компьютером.</p>
+      <p>Создай комнату, отправь другу ссылку и играйте с разных компьютеров или телефонов.</p>
       <div class="decoration" aria-hidden="true"><span>×</span><span>○</span><span>×</span></div>
       <div class="tip"><b>Простые правила</b><p>Собери три своих символа по горизонтали, вертикали или диагонали. Крестики ходят первыми.</p></div>
     </section>
     <section class="game" aria-label="Крестики-нолики">
-      <div class="mode" role="group" aria-label="Режим игры"><button id="computer" aria-pressed="true">С компьютером</button><button id="friend" aria-pressed="false">С другом</button></div>
+      <div class="mode" role="group" aria-label="Режим игры"><button id="online" aria-pressed="true">Друг онлайн</button><button id="computer" aria-pressed="false">Компьютер</button><button id="friend" aria-pressed="false">На одном экране</button></div>
+      <div id="online-panel" class="online-panel">
+        <button id="create-room" class="restart">Создать комнату</button>
+        <form id="join-form"><label for="room-code">Код комнаты или ссылка друга</label><div class="join-row"><input id="room-code" autocomplete="off" placeholder="Вставь код или ссылку" required><button id="join-room" type="submit">Войти</button></div></form>
+        <div id="invite" hidden><label for="invite-link">Отправь эту ссылку другу</label><div class="join-row"><input id="invite-link" readonly><button id="copy-link">Копировать</button></div></div>
+        <p id="network-status" role="status" aria-live="polite">Создай комнату или войди по ссылке друга.</p>
+        <button id="leave-room" class="reset" hidden>Выйти из комнаты</button>
+      </div>
       <div class="game-heading"><h2 id="status" role="status" aria-live="polite">Твой ход</h2><span id="turn-badge">ТЫ — ×</span></div>
       <div class="board" aria-label="Игровое поле"></div>
       <div class="scores"><div><span class="x-label" id="x-label">Ты · ×</span><strong id="score-x">0</strong></div><div><span>Ничьи</span><strong id="score-draw">0</strong></div><div><span class="o-label" id="o-label">Компьютер · ○</span><strong id="score-o">0</strong></div></div>
